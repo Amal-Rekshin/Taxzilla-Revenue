@@ -8,39 +8,40 @@
  * 1. ONLY EVENING entries are used in all totals and reports. Morning data is reference only.
  * 2. Total 1 = sum of amounts where in_core_total === true (CRO + GST + REGISTRATION + EXIM).
  * 3. Total 2 = sum of all section amounts.
- * 4. ACCOUNTS ongoing_jobs and outstanding_jobs are running balances, resolved by taking
+ * 4. ACCOUNTS outstanding_jobs_amount is a running balance, resolved by taking
  *    the value on the LAST day of that month that has an evening entry.
- *    Kept in ONE function: calculateAccountsRunningBalances.
+ *    ACCOUNTS new_jobs_amount is summed across all completed days.
  */
 
 const { isSunday } = require('../utils/dateUtils');
 
 /**
- * Isolated function to determine Accounts running balances for a given month or week.
- * Returns the ongoing_jobs and outstanding_jobs from the last day in the set
+ * Determines Accounts running balance for a given month or week.
+ * Returns the outstanding_jobs_amount from the last day in the set
  * that has an evening entry for ACCOUNTS.
  * 
  * @param {Array} eveningDays - Array of day objects with date and section entries, ordered chronologically.
- * @returns {{ ongoing_jobs: number, outstanding_jobs: number }}
+ * @returns {{ outstanding_jobs_amount: number, outstanding_jobs: number, ongoing_jobs: number }}
  */
 function calculateAccountsRunningBalances(eveningDays) {
-  let lastOngoing = 0;
-  let lastOutstanding = 0;
+  let lastOutstandingAmount = 0;
+  let lastOutstandingJobs = 0;
 
   for (const day of eveningDays) {
     if (day.status === 'COMPLETE' && day.accounts) {
-      if (day.accounts.ongoing_jobs !== null && day.accounts.ongoing_jobs !== undefined) {
-        lastOngoing = day.accounts.ongoing_jobs;
+      if (day.accounts.outstanding_jobs_amount !== null && day.accounts.outstanding_jobs_amount !== undefined) {
+        lastOutstandingAmount = day.accounts.outstanding_jobs_amount;
       }
       if (day.accounts.outstanding_jobs !== null && day.accounts.outstanding_jobs !== undefined) {
-        lastOutstanding = day.accounts.outstanding_jobs;
+        lastOutstandingJobs = day.accounts.outstanding_jobs;
       }
     }
   }
 
   return {
-    ongoing_jobs: lastOngoing,
-    outstanding_jobs: lastOutstanding,
+    outstanding_jobs_amount: lastOutstandingAmount,
+    outstanding_jobs: lastOutstandingJobs,
+    ongoing_jobs: 0,
   };
 }
 
@@ -88,14 +89,15 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
   const daysInMonth = new Date(year, month, 0).getDate();
 
   function toDateString(val) {
-  if (typeof val === 'string') {
-    return val.substring(0, 10);
+    if (typeof val === 'string') {
+      return val.substring(0, 10);
+    }
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
   }
-  const year = val.getFullYear();
-  const month = String(val.getMonth() + 1).padStart(2, '0');
-  const day = String(val.getDate()).padStart(2, '0');
-  return `${year}-${month}-${day}`;
-}
+
   const entryMap = new Map();
   for (const row of dbRows) {
     const dateStr = toDateString(row.entry_date);
@@ -115,7 +117,7 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
     sectionAmountSums[sec.code] = 0;
     sectionJobSums[sec.code] = 0;
   }
-  let accountsNewJobsSum = 0;
+  let accountsNewJobsAmountSum = 0;
 
   // Build each calendar day
   for (let d = 1; d <= daysInMonth; d++) {
@@ -130,7 +132,13 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
 
     const amounts = {};
     const jobs = {};
-    let accountsTriple = { ongoing_jobs: 0, new_jobs: 0, outstanding_jobs: 0 };
+    let accountsData = {
+      new_jobs_amount: 0,
+      outstanding_jobs_amount: 0,
+      new_jobs: 0,
+      outstanding_jobs: 0,
+      ongoing_jobs: 0,
+    };
     const daySectionList = [];
 
     for (const sec of sections) {
@@ -141,11 +149,15 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
       if (sec.count_type === 'SINGLE') {
         const jc = entry && entry.jobs_completed !== null ? entry.jobs_completed : 0;
         jobs[sec.code] = jc;
-      } else if (sec.count_type === 'TRIPLE') {
-        accountsTriple = {
-          ongoing_jobs: entry && entry.ongoing_jobs !== null ? entry.ongoing_jobs : 0,
-          new_jobs: entry && entry.new_jobs !== null ? entry.new_jobs : 0,
-          outstanding_jobs: entry && entry.outstanding_jobs !== null ? entry.outstanding_jobs : 0,
+      } else if (sec.count_type === 'TRIPLE' || sec.code === 'ACCOUNTS') {
+        const nja = entry && entry.new_jobs_amount !== null ? parseFloat(entry.new_jobs_amount) : (amt || 0);
+        const oja = entry && entry.outstanding_jobs_amount !== null ? parseFloat(entry.outstanding_jobs_amount) : 0;
+        accountsData = {
+          new_jobs_amount: nja,
+          outstanding_jobs_amount: oja,
+          new_jobs: 0,
+          outstanding_jobs: 0,
+          ongoing_jobs: 0,
         };
       }
 
@@ -173,7 +185,7 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
           sectionJobSums[sec.code] += jobs[sec.code];
         }
       }
-      accountsNewJobsSum += accountsTriple.new_jobs;
+      accountsNewJobsAmountSum += accountsData.new_jobs_amount;
     }
 
     const isSun = isSunday(fullDate);
@@ -185,13 +197,13 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
       isSunday: isSun,
       amounts,
       jobs,
-      accounts: accountsTriple,
+      accounts: accountsData,
       total1,
       total2,
     });
   }
 
-  // Calculate weekly totals (weeks end on Sunday, or the last day of the month)
+  // Calculate weekly totals
   const weeks = [];
   let currentWeekDays = [];
 
@@ -201,7 +213,6 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
 
     const isLastDay = i === days.length - 1;
     if (day.isSunday || isLastDay) {
-      // Calculate totals for this week
       let wTotal1 = 0;
       let wTotal2 = 0;
       const wAmounts = {};
@@ -210,7 +221,7 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
         wAmounts[sec.code] = 0;
         wJobs[sec.code] = 0;
       }
-      let wNewJobs = 0;
+      let wNewJobsAmount = 0;
 
       for (const wd of currentWeekDays) {
         if (wd.status === 'COMPLETE') {
@@ -222,7 +233,7 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
               wJobs[sec.code] += wd.jobs[sec.code] || 0;
             }
           }
-          wNewJobs += wd.accounts.new_jobs || 0;
+          wNewJobsAmount += wd.accounts.new_jobs_amount || 0;
         }
       }
 
@@ -247,9 +258,11 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
           amounts: wAmounts,
           jobs: wJobs,
           accounts: {
-            ongoing_jobs: wAccountsRunning.ongoing_jobs,
-            new_jobs: wNewJobs,
-            outstanding_jobs: wAccountsRunning.outstanding_jobs,
+            new_jobs_amount: Math.round(wNewJobsAmount * 100) / 100,
+            outstanding_jobs_amount: wAccountsRunning.outstanding_jobs_amount,
+            new_jobs: 0,
+            outstanding_jobs: 0,
+            ongoing_jobs: 0,
           },
         },
       });
@@ -281,9 +294,11 @@ function compileMonthlyReport(yearMonth, sections, dbRows) {
     amounts: sectionAmountSums,
     jobs: sectionJobSums,
     accounts: {
-      ongoing_jobs: accountsRunningBalance.ongoing_jobs,
-      new_jobs: accountsNewJobsSum,
-      outstanding_jobs: accountsRunningBalance.outstanding_jobs,
+      new_jobs_amount: Math.round(accountsNewJobsAmountSum * 100) / 100,
+      outstanding_jobs_amount: accountsRunningBalance.outstanding_jobs_amount,
+      new_jobs: 0,
+      outstanding_jobs: 0,
+      ongoing_jobs: 0,
     },
   };
 

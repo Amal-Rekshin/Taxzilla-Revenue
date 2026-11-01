@@ -1,16 +1,22 @@
 class ReportAccountsModel {
+  final double newJobsAmount;
+  final double outstandingJobsAmount;
   final int ongoingJobs;
   final int newJobs;
   final int outstandingJobs;
 
   const ReportAccountsModel({
-    required this.ongoingJobs,
-    required this.newJobs,
-    required this.outstandingJobs,
+    required this.newJobsAmount,
+    required this.outstandingJobsAmount,
+    this.ongoingJobs = 0,
+    this.newJobs = 0,
+    this.outstandingJobs = 0,
   });
 
   factory ReportAccountsModel.fromJson(Map<String, dynamic> json) {
     return ReportAccountsModel(
+      newJobsAmount: (json['new_jobs_amount'] as num?)?.toDouble() ?? 0.0,
+      outstandingJobsAmount: (json['outstanding_jobs_amount'] as num?)?.toDouble() ?? 0.0,
       ongoingJobs: (json['ongoing_jobs'] as num?)?.toInt() ?? 0,
       newJobs: (json['new_jobs'] as num?)?.toInt() ?? 0,
       outstandingJobs: (json['outstanding_jobs'] as num?)?.toInt() ?? 0,
@@ -48,19 +54,47 @@ class ReportDayModel {
     final rawJobs = json['jobs'] is Map ? Map<String, dynamic>.from(json['jobs'] as Map) : <String, dynamic>{};
     final jobs = rawJobs.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
 
-    final rawAccounts = json['accounts'] is Map ? Map<String, dynamic>.from(json['accounts'] as Map) : <String, dynamic>{};
-    final status = json['status']?.toString() ?? 'PENDING';
-    final isSun = json['isSunday'] as bool? ?? (status == 'SUNDAY');
-
     return ReportDayModel(
-      date: json['date']?.toString() ?? '',
-      status: status,
-      isSunday: isSun,
+      date: json['date'] as String,
+      status: json['status'] as String,
+      isSunday: json['isSunday'] as bool? ?? false,
       amounts: amounts,
       jobs: jobs,
-      accounts: ReportAccountsModel.fromJson(rawAccounts),
+      accounts: ReportAccountsModel.fromJson(json['accounts'] is Map ? Map<String, dynamic>.from(json['accounts'] as Map) : {}),
       total1: (json['total1'] as num?)?.toDouble() ?? 0.0,
       total2: (json['total2'] as num?)?.toDouble() ?? 0.0,
+    );
+  }
+}
+
+class ReportWeekTotals {
+  final double total1;
+  final double total2;
+  final Map<String, double> amounts;
+  final Map<String, int> jobs;
+  final ReportAccountsModel accounts;
+
+  const ReportWeekTotals({
+    required this.total1,
+    required this.total2,
+    required this.amounts,
+    required this.jobs,
+    required this.accounts,
+  });
+
+  factory ReportWeekTotals.fromJson(Map<String, dynamic> json) {
+    final rawAmounts = json['amounts'] is Map ? Map<String, dynamic>.from(json['amounts'] as Map) : <String, dynamic>{};
+    final amounts = rawAmounts.map((k, v) => MapEntry(k.toString(), (v as num).toDouble()));
+
+    final rawJobs = json['jobs'] is Map ? Map<String, dynamic>.from(json['jobs'] as Map) : <String, dynamic>{};
+    final jobs = rawJobs.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
+
+    return ReportWeekTotals(
+      total1: (json['total1'] as num?)?.toDouble() ?? 0.0,
+      total2: (json['total2'] as num?)?.toDouble() ?? 0.0,
+      amounts: amounts,
+      jobs: jobs,
+      accounts: ReportAccountsModel.fromJson(json['accounts'] is Map ? Map<String, dynamic>.from(json['accounts'] as Map) : {}),
     );
   }
 }
@@ -71,7 +105,7 @@ class ReportWeekModel {
   final String startDate;
   final String endDate;
   final int dayCount;
-  final MonthTotalsModel totals;
+  final ReportWeekTotals totals;
 
   const ReportWeekModel({
     required this.weekNumber,
@@ -83,48 +117,13 @@ class ReportWeekModel {
   });
 
   factory ReportWeekModel.fromJson(Map<String, dynamic> json) {
-    final rawTotals = json['totals'] is Map ? Map<String, dynamic>.from(json['totals'] as Map) : <String, dynamic>{};
     return ReportWeekModel(
-      weekNumber: (json['weekNumber'] as num?)?.toInt() ?? 1,
-      label: json['label']?.toString() ?? 'Week',
-      startDate: json['startDate']?.toString() ?? '',
-      endDate: json['endDate']?.toString() ?? '',
-      dayCount: (json['dayCount'] as num?)?.toInt() ?? 0,
-      totals: MonthTotalsModel.fromJson(rawTotals),
-    );
-  }
-}
-
-class MonthTotalsModel {
-  final double total1;
-  final double total2;
-  final Map<String, double> amounts;
-  final Map<String, int> jobs;
-  final ReportAccountsModel accounts;
-
-  const MonthTotalsModel({
-    required this.total1,
-    required this.total2,
-    required this.amounts,
-    required this.jobs,
-    required this.accounts,
-  });
-
-  factory MonthTotalsModel.fromJson(Map<String, dynamic> json) {
-    final rawAmounts = json['amounts'] is Map ? Map<String, dynamic>.from(json['amounts'] as Map) : <String, dynamic>{};
-    final amounts = rawAmounts.map((k, v) => MapEntry(k.toString(), (v as num).toDouble()));
-
-    final rawJobs = json['jobs'] is Map ? Map<String, dynamic>.from(json['jobs'] as Map) : <String, dynamic>{};
-    final jobs = rawJobs.map((k, v) => MapEntry(k.toString(), (v as num).toInt()));
-
-    final rawAccounts = json['accounts'] is Map ? Map<String, dynamic>.from(json['accounts'] as Map) : <String, dynamic>{};
-
-    return MonthTotalsModel(
-      total1: (json['total1'] as num?)?.toDouble() ?? 0.0,
-      total2: (json['total2'] as num?)?.toDouble() ?? 0.0,
-      amounts: amounts,
-      jobs: jobs,
-      accounts: ReportAccountsModel.fromJson(rawAccounts),
+      weekNumber: json['weekNumber'] as int? ?? 1,
+      label: json['label'] as String? ?? '',
+      startDate: json['startDate'] as String? ?? '',
+      endDate: json['endDate'] as String? ?? '',
+      dayCount: json['dayCount'] as int? ?? 0,
+      totals: ReportWeekTotals.fromJson(json['totals'] is Map ? Map<String, dynamic>.from(json['totals'] as Map) : {}),
     );
   }
 }
@@ -133,7 +132,7 @@ class MonthlyReportModel {
   final String month;
   final List<ReportDayModel> days;
   final List<ReportWeekModel> weeks;
-  final MonthTotalsModel monthTotals;
+  final ReportWeekTotals monthTotals;
 
   const MonthlyReportModel({
     required this.month,
@@ -144,15 +143,16 @@ class MonthlyReportModel {
 
   factory MonthlyReportModel.fromJson(Map<String, dynamic> json) {
     final rawDays = json['days'] as List<dynamic>? ?? [];
+    final days = rawDays.map((d) => ReportDayModel.fromJson(d as Map<String, dynamic>)).toList();
+
     final rawWeeks = json['weeks'] as List<dynamic>? ?? [];
-    final rawTotals = json['monthTotals'] is Map ? Map<String, dynamic>.from(json['monthTotals'] as Map) : <String, dynamic>{};
+    final weeks = rawWeeks.map((w) => ReportWeekModel.fromJson(w as Map<String, dynamic>)).toList();
 
     return MonthlyReportModel(
-      month: json['month']?.toString() ?? '',
-      days: rawDays.map((d) => ReportDayModel.fromJson(Map<String, dynamic>.from(d as Map))).toList(),
-      weeks: rawWeeks.map((w) => ReportWeekModel.fromJson(Map<String, dynamic>.from(w as Map))).toList(),
-      monthTotals: MonthTotalsModel.fromJson(rawTotals),
+      month: json['month'] as String? ?? '',
+      days: days,
+      weeks: weeks,
+      monthTotals: ReportWeekTotals.fromJson(json['monthTotals'] is Map ? Map<String, dynamic>.from(json['monthTotals'] as Map) : {}),
     );
   }
 }
-

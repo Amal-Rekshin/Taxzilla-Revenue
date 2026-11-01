@@ -363,15 +363,15 @@ class _DayDetailModalState extends ConsumerState<DayDetailModal> {
                   children: [
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text('Ongoing', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      child: Text('New Job Amount', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(morning.isEntered ? (morning.ongoingJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11)),
+                      child: Text(morning.isEntered ? CurrencyFormatter.format(morning.newJobsAmount ?? 0) : '-', style: const TextStyle(fontSize: 11)),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(evening.isEntered ? (evening.ongoingJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: Text(evening.isEntered ? CurrencyFormatter.format(evening.newJobsAmount ?? 0) : '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),
@@ -379,31 +379,15 @@ class _DayDetailModalState extends ConsumerState<DayDetailModal> {
                   children: [
                     const Padding(
                       padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text('New Job', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
+                      child: Text('Outstanding Amount', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(morning.isEntered ? (morning.newJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11)),
+                      child: Text(morning.isEntered ? CurrencyFormatter.format(morning.outstandingJobsAmount ?? 0) : '-', style: const TextStyle(fontSize: 11)),
                     ),
                     Padding(
                       padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(evening.isEntered ? (evening.newJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
-                    ),
-                  ],
-                ),
-                TableRow(
-                  children: [
-                    const Padding(
-                      padding: EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text('Outstanding', style: TextStyle(fontSize: 11, fontWeight: FontWeight.w600)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(morning.isEntered ? (morning.outstandingJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11)),
-                    ),
-                    Padding(
-                      padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 4),
-                      child: Text(evening.isEntered ? (evening.outstandingJobs ?? 0).toString() : '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
+                      child: Text(evening.isEntered ? CurrencyFormatter.format(evening.outstandingJobsAmount ?? 0) : '-', style: const TextStyle(fontSize: 11, fontWeight: FontWeight.bold)),
                     ),
                   ],
                 ),

@@ -1,4 +1,4 @@
-const { pool, query } = require('../db/client');
+const { query, pool } = require('../db/client');
 const { validatePutEntries } = require('../validators/entryValidator');
 const { isValidDateFormat } = require('../utils/dateUtils');
 const { ValidationError } = require('../utils/errors');
@@ -22,6 +22,8 @@ async function getEntriesByDate(req, res, next) {
           s.sort_order,
           e.id AS entry_id,
           e.amount,
+          e.new_jobs_amount,
+          e.outstanding_jobs_amount,
           e.jobs_completed,
           e.ongoing_jobs,
           e.new_jobs,
@@ -46,6 +48,8 @@ async function getEntriesByDate(req, res, next) {
         sort_order: r.sort_order,
         entry_id: r.entry_id,
         amount: r.amount !== null ? r.amount : '0.00',
+        new_jobs_amount: r.new_jobs_amount !== null ? r.new_jobs_amount : '0.00',
+        outstanding_jobs_amount: r.outstanding_jobs_amount !== null ? r.outstanding_jobs_amount : '0.00',
         jobs_completed: r.jobs_completed,
         ongoing_jobs: r.ongoing_jobs,
         new_jobs: r.new_jobs,
@@ -98,7 +102,7 @@ async function putEntries(req, res, next) {
     for (const item of entriesToSave) {
       // 1. Fetch current existing row to detect changes for audit
       const existingRes = await client.query(
-        `SELECT id, amount, jobs_completed, ongoing_jobs, new_jobs, outstanding_jobs 
+        `SELECT id, amount, new_jobs_amount, outstanding_jobs_amount, jobs_completed, ongoing_jobs, new_jobs, outstanding_jobs 
          FROM daily_entries 
          WHERE entry_date = $1 AND section_id = $2 AND slot IN ($3, 'MORNING')`,
         [date, item.section_id, targetSlot]
@@ -108,12 +112,14 @@ async function putEntries(req, res, next) {
       // 2. Perform transactional upsert
       const upsertSql = `
         INSERT INTO daily_entries (
-          entry_date, section_id, slot, amount, jobs_completed, ongoing_jobs, new_jobs, outstanding_jobs, updated_by, updated_at
+          entry_date, section_id, slot, amount, new_jobs_amount, outstanding_jobs_amount, jobs_completed, ongoing_jobs, new_jobs, outstanding_jobs, updated_by, updated_at
         )
-        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, now())
+        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, now())
         ON CONFLICT (entry_date, section_id, slot)
         DO UPDATE SET
           amount = EXCLUDED.amount,
+          new_jobs_amount = EXCLUDED.new_jobs_amount,
+          outstanding_jobs_amount = EXCLUDED.outstanding_jobs_amount,
           jobs_completed = EXCLUDED.jobs_completed,
           ongoing_jobs = EXCLUDED.ongoing_jobs,
           new_jobs = EXCLUDED.new_jobs,
@@ -128,6 +134,8 @@ async function putEntries(req, res, next) {
         item.section_id,
         targetSlot,
         item.amount,
+        item.new_jobs_amount,
+        item.outstanding_jobs_amount,
         item.jobs_completed,
         item.ongoing_jobs,
         item.new_jobs,
@@ -140,28 +148,29 @@ async function putEntries(req, res, next) {
       if (oldRow) {
         const oldAmount = parseFloat(oldRow.amount || '0').toFixed(2);
         const newAmount = parseFloat(item.amount || '0').toFixed(2);
+        const oldNja = parseFloat(oldRow.new_jobs_amount || '0').toFixed(2);
+        const newNja = parseFloat(item.new_jobs_amount || '0').toFixed(2);
+        const oldOja = parseFloat(oldRow.outstanding_jobs_amount || '0').toFixed(2);
+        const newOja = parseFloat(item.outstanding_jobs_amount || '0').toFixed(2);
 
         const isChanged =
           oldAmount !== newAmount ||
-          oldRow.jobs_completed !== item.jobs_completed ||
-          oldRow.ongoing_jobs !== item.ongoing_jobs ||
-          oldRow.new_jobs !== item.new_jobs ||
-          oldRow.outstanding_jobs !== item.outstanding_jobs;
+          oldNja !== newNja ||
+          oldOja !== newOja ||
+          oldRow.jobs_completed !== item.jobs_completed;
 
         if (isChanged) {
           const oldValues = {
             amount: oldAmount,
+            new_jobs_amount: oldNja,
+            outstanding_jobs_amount: oldOja,
             jobs_completed: oldRow.jobs_completed,
-            ongoing_jobs: oldRow.ongoing_jobs,
-            new_jobs: oldRow.new_jobs,
-            outstanding_jobs: oldRow.outstanding_jobs,
           };
           const newValues = {
             amount: newAmount,
+            new_jobs_amount: newNja,
+            outstanding_jobs_amount: newOja,
             jobs_completed: item.jobs_completed,
-            ongoing_jobs: item.ongoing_jobs,
-            new_jobs: item.new_jobs,
-            outstanding_jobs: item.outstanding_jobs,
           };
 
           await client.query(
@@ -194,4 +203,3 @@ module.exports = {
   getEntriesByDate,
   putEntries,
 };
-

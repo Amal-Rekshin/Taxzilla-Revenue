@@ -17,31 +17,48 @@ class SecureStorageService {
 
   Future<void> saveToken(String token) async {
     _cachedToken = token;
-    await _storage.write(key: _tokenKey, value: token);
+    try {
+      await _storage.write(key: _tokenKey, value: token);
+    } catch (_) {
+      // In-memory cache preserved if secure storage fails
+    }
   }
 
   Future<String?> getToken() async {
     if (_cachedToken != null) return _cachedToken;
-    _cachedToken = await _storage.read(key: _tokenKey);
+    try {
+      _cachedToken = await _storage.read(key: _tokenKey);
+    } catch (_) {
+      _cachedToken = null;
+    }
     return _cachedToken;
   }
 
   Future<void> saveUsername(String username) async {
     _cachedUsername = username;
-    await _storage.write(key: _usernameKey, value: username);
+    try {
+      await _storage.write(key: _usernameKey, value: username);
+    } catch (_) {
+      // In-memory cache preserved if secure storage fails
+    }
   }
 
   Future<String?> getUsername() async {
     if (_cachedUsername != null) return _cachedUsername;
-    _cachedUsername = await _storage.read(key: _usernameKey);
+    try {
+      _cachedUsername = await _storage.read(key: _usernameKey);
+    } catch (_) {
+      _cachedUsername = null;
+    }
     return _cachedUsername;
   }
 
   Future<void> clearSession() async {
     _cachedToken = null;
     _cachedUsername = null;
-    await _storage.delete(key: _tokenKey);
-    await _storage.delete(key: _usernameKey);
+    try {
+      await _storage.delete(key: _tokenKey);
+      await _storage.delete(key: _usernameKey);
+    } catch (_) {}
   }
 }
-

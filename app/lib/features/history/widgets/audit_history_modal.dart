@@ -239,24 +239,18 @@ class _AuditHistoryViewState extends ConsumerState<AuditHistoryView> {
               audit.newValues['jobs_completed']?.toString() ?? 'None',
             ),
 
-          // Triple counts diffs
-          if (audit.oldValues?['ongoing_jobs'] != audit.newValues['ongoing_jobs'])
+          // Accounts amounts diffs
+          if (audit.oldValues?['new_jobs_amount'] != audit.newValues['new_jobs_amount'])
             _buildDiffRow(
-              'Ongoing Jobs',
-              audit.oldValues?['ongoing_jobs']?.toString() ?? 'None',
-              audit.newValues['ongoing_jobs']?.toString() ?? 'None',
+              'New Job Amount',
+              audit.oldValues?['new_jobs_amount'] != null ? CurrencyFormatter.format(num.tryParse(audit.oldValues!['new_jobs_amount'].toString())) : 'None',
+              audit.newValues['new_jobs_amount'] != null ? CurrencyFormatter.format(num.tryParse(audit.newValues['new_jobs_amount'].toString())) : 'None',
             ),
-          if (audit.oldValues?['new_jobs'] != audit.newValues['new_jobs'])
+          if (audit.oldValues?['outstanding_jobs_amount'] != audit.newValues['outstanding_jobs_amount'])
             _buildDiffRow(
-              'New Jobs',
-              audit.oldValues?['new_jobs']?.toString() ?? 'None',
-              audit.newValues['new_jobs']?.toString() ?? 'None',
-            ),
-          if (audit.oldValues?['outstanding_jobs'] != audit.newValues['outstanding_jobs'])
-            _buildDiffRow(
-              'Outstanding Jobs',
-              audit.oldValues?['outstanding_jobs']?.toString() ?? 'None',
-              audit.newValues['outstanding_jobs']?.toString() ?? 'None',
+              'Outstanding Amount',
+              audit.oldValues?['outstanding_jobs_amount'] != null ? CurrencyFormatter.format(num.tryParse(audit.oldValues!['outstanding_jobs_amount'].toString())) : 'None',
+              audit.newValues['outstanding_jobs_amount'] != null ? CurrencyFormatter.format(num.tryParse(audit.newValues['outstanding_jobs_amount'].toString())) : 'None',
             ),
         ],
       ),

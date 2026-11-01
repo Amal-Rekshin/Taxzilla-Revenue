@@ -3,10 +3,10 @@ const { pool } = require('./client');
 
 const SECTIONS = [
   { code: 'EXIM', name: 'EXIM', in_core_total: true, count_type: 'SINGLE', sort_order: 1 },
-  { code: 'CRO', name: 'CRO', in_core_total: true, count_type: 'SINGLE', sort_order: 2 },
-  { code: 'GST', name: 'GST', in_core_total: true, count_type: 'SINGLE', sort_order: 3 },
-  { code: 'ACCOUNTS', name: 'ACCOUNTS', in_core_total: false, count_type: 'TRIPLE', sort_order: 4 },
-  { code: 'REGISTRATION', name: 'REGISTRATION', in_core_total: true, count_type: 'SINGLE', sort_order: 5 },
+  { code: 'GST', name: 'GST', in_core_total: true, count_type: 'SINGLE', sort_order: 2 },
+  { code: 'REGISTRATION', name: 'REGISTRATION', in_core_total: true, count_type: 'SINGLE', sort_order: 3 },
+  { code: 'CRO', name: 'CRO', in_core_total: true, count_type: 'SINGLE', sort_order: 4 },
+  { code: 'ACCOUNTS', name: 'ACCOUNTS', in_core_total: false, count_type: 'TRIPLE', sort_order: 5 },
   { code: 'MARKETING', name: 'MARKETING', in_core_total: false, count_type: 'SINGLE', sort_order: 6 },
 ];
 

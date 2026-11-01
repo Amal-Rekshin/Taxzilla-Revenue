@@ -52,19 +52,18 @@ void main() {
         inCoreTotal: false,
         countType: 'TRIPLE',
         amount: 2500.0,
+        newJobsAmount: 1500.0,
+        outstandingJobsAmount: 1000.0,
         jobsCompleted: 99, // Should be omitted in json
-        ongoingJobs: 12,
-        newJobs: 4,
-        outstandingJobs: 8,
       );
 
       final tripleJson = triple.toJson();
       expect(tripleJson['section_id'], 4);
       expect(tripleJson['amount'], 2500.0);
-      expect(tripleJson['ongoing_jobs'], 12);
-      expect(tripleJson['new_jobs'], 4);
-      expect(tripleJson['outstanding_jobs'], 8);
+      expect(tripleJson['new_jobs_amount'], 1500.0);
+      expect(tripleJson['outstanding_jobs_amount'], 1000.0);
       expect(tripleJson.containsKey('jobs_completed'), false);
+      expect(tripleJson.containsKey('ongoing_jobs'), false);
     });
   });
 }

@@ -26,7 +26,7 @@ class SectionModel {
     );
   }
 
-  bool get isTriple => countType == 'TRIPLE';
+  bool get isTriple => countType == 'TRIPLE' || code == 'ACCOUNTS';
 }
 
 class SectionEntryInput {
@@ -37,9 +37,13 @@ class SectionEntryInput {
   final String countType;
   double amount;
   int? jobsCompleted;
+  double? newJobsAmount;
+  double? outstandingJobsAmount;
   int? ongoingJobs;
   int? newJobs;
   int? outstandingJobs;
+
+  bool get isTriple => countType == 'TRIPLE' || code == 'ACCOUNTS';
 
   SectionEntryInput({
     required this.sectionId,
@@ -49,6 +53,8 @@ class SectionEntryInput {
     required this.countType,
     this.amount = 0.0,
     this.jobsCompleted,
+    this.newJobsAmount,
+    this.outstandingJobsAmount,
     this.ongoingJobs,
     this.newJobs,
     this.outstandingJobs,
@@ -62,13 +68,11 @@ class SectionEntryInput {
 
     if (countType == 'SINGLE') {
       map['jobs_completed'] = jobsCompleted ?? 0;
-    } else if (countType == 'TRIPLE') {
-      map['ongoing_jobs'] = ongoingJobs ?? 0;
-      map['new_jobs'] = newJobs ?? 0;
-      map['outstanding_jobs'] = outstandingJobs ?? 0;
+    } else if (countType == 'TRIPLE' || code == 'ACCOUNTS') {
+      map['new_jobs_amount'] = newJobsAmount ?? 0.0;
+      map['outstanding_jobs_amount'] = outstandingJobsAmount ?? 0.0;
     }
 
     return map;
   }
 }
-

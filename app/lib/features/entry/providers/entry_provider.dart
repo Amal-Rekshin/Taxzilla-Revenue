@@ -5,74 +5,72 @@ import '../../../core/network/api_error.dart';
 import '../../auth/providers/auth_provider.dart';
 import '../models/section_model.dart';
 
-// Sections provider
-final sectionsProvider = FutureProvider<List<SectionModel>>((ref) async {
-  final authState = ref.watch(authNotifierProvider);
-  if (authState.status != AuthStatus.authenticated) {
-    throw ApiError(code: 'UNAUTHORIZED', message: 'User is not authenticated');
-  }
-
-  final dio = ref.watch(dioProvider);
-  final response = await dio.get('/sections');
-  final list = response.data as List<dynamic>;
-  return list.map((item) => SectionModel.fromJson(item as Map<String, dynamic>)).toList();
-});
-
-// Selected date provider
+// Currently selected date for Daily Entry (Defaults to today in YYYY-MM-DD)
 final selectedDateProvider = StateProvider<String>((ref) {
   final now = DateTime.now();
   return DateFormat('yyyy-MM-dd').format(now);
 });
 
-// Selected slot provider: 'AFTERNOON' or 'EVENING' (default 'EVENING' as it counts in totals)
-final selectedSlotProvider = StateProvider<String>((ref) {
-  return 'EVENING';
+// Currently selected slot ('AFTERNOON' or 'EVENING')
+final selectedSlotProvider = StateProvider<String>((ref) => 'EVENING');
+
+// Sections provider: loads the ordered list of 6 sections from backend
+final sectionsProvider = FutureProvider<List<SectionModel>>((ref) async {
+  final dio = ref.watch(dioProvider);
+  try {
+    final response = await dio.get('/sections');
+    final list = response.data as List<dynamic>;
+    return list.map((item) => SectionModel.fromJson(item as Map<String, dynamic>)).toList();
+  } on DioException catch (e) {
+    throw ApiError.fromDioException(e);
+  }
 });
 
+// Form state for daily entries
 class EntryFormState {
   final bool isLoading;
   final bool isSaving;
-  final bool isDirty;
   final String? errorMessage;
   final String? successMessage;
   final List<SectionEntryInput> entries;
   final List<SectionEntryInput> initialEntries;
   final double liveTotal1;
   final double liveTotal2;
+  final bool isDirty;
 
   const EntryFormState({
     this.isLoading = false,
     this.isSaving = false,
-    this.isDirty = false,
     this.errorMessage,
     this.successMessage,
     this.entries = const [],
     this.initialEntries = const [],
     this.liveTotal1 = 0.0,
     this.liveTotal2 = 0.0,
+    this.isDirty = false,
   });
 
   EntryFormState copyWith({
     bool? isLoading,
     bool? isSaving,
-    bool? isDirty,
     String? errorMessage,
     String? successMessage,
     List<SectionEntryInput>? entries,
     List<SectionEntryInput>? initialEntries,
     double? liveTotal1,
     double? liveTotal2,
+    bool? isDirty,
   }) {
     return EntryFormState(
       isLoading: isLoading ?? this.isLoading,
       isSaving: isSaving ?? this.isSaving,
-      isDirty: isDirty ?? this.isDirty,
       errorMessage: errorMessage,
       successMessage: successMessage,
       entries: entries ?? this.entries,
       initialEntries: initialEntries ?? this.initialEntries,
       liveTotal1: liveTotal1 ?? this.liveTotal1,
       liveTotal2: liveTotal2 ?? this.liveTotal2,
+      isDirty: isDirty ?? this.isDirty,
     );
   }
 }
@@ -95,9 +93,8 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
         countType: sec.countType,
         amount: 0.0,
         jobsCompleted: sec.isTriple ? null : 0,
-        ongoingJobs: sec.isTriple ? 0 : null,
-        newJobs: sec.isTriple ? 0 : null,
-        outstandingJobs: sec.isTriple ? 0 : null,
+        newJobsAmount: sec.isTriple ? 0.0 : null,
+        outstandingJobsAmount: sec.isTriple ? 0.0 : null,
       );
     }).toList();
 
@@ -115,7 +112,7 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
     try {
       final response = await _dio.get('/entries/$date');
       final data = response.data as Map<String, dynamic>;
-      final slotKey = slot.toLowerCase(); // 'afternoon', 'morning', or 'evening'
+      final slotKey = slot.toLowerCase();
       final rawList = (data[slotKey] ?? (slotKey == 'afternoon' ? data['morning'] : (slotKey == 'morning' ? data['afternoon'] : null))) as List<dynamic>? ?? [];
 
       final rawMap = <int, Map<String, dynamic>>{};
@@ -126,9 +123,16 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
 
       final updatedEntries = _sections.map((sec) {
         final saved = rawMap[sec.id];
-        final amount = saved != null && saved['amount'] != null
+        final rawAmount = saved != null && saved['amount'] != null
             ? double.tryParse(saved['amount'].toString()) ?? 0.0
             : 0.0;
+        final nja = saved != null && saved['new_jobs_amount'] != null
+            ? double.tryParse(saved['new_jobs_amount'].toString()) ?? 0.0
+            : (sec.isTriple ? rawAmount : 0.0);
+        final oja = saved != null && saved['outstanding_jobs_amount'] != null
+            ? double.tryParse(saved['outstanding_jobs_amount'].toString()) ?? 0.0
+            : 0.0;
+        final amount = sec.isTriple ? (nja + oja) : rawAmount;
 
         return SectionEntryInput(
           sectionId: sec.id,
@@ -140,15 +144,8 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
           jobsCompleted: sec.isTriple
               ? null
               : (saved != null ? saved['jobs_completed'] as int? ?? 0 : 0),
-          ongoingJobs: sec.isTriple
-              ? (saved != null ? saved['ongoing_jobs'] as int? ?? 0 : 0)
-              : null,
-          newJobs: sec.isTriple
-              ? (saved != null ? saved['new_jobs'] as int? ?? 0 : 0)
-              : null,
-          outstandingJobs: sec.isTriple
-              ? (saved != null ? saved['outstanding_jobs'] as int? ?? 0 : 0)
-              : null,
+          newJobsAmount: sec.isTriple ? nja : null,
+          outstandingJobsAmount: sec.isTriple ? oja : null,
         );
       }).toList();
 
@@ -163,9 +160,8 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
         countType: e.countType,
         amount: e.amount,
         jobsCompleted: e.jobsCompleted,
-        ongoingJobs: e.ongoingJobs,
-        newJobs: e.newJobs,
-        outstandingJobs: e.outstandingJobs,
+        newJobsAmount: e.newJobsAmount,
+        outstandingJobsAmount: e.outstandingJobsAmount,
       )).toList();
 
       state = state.copyWith(
@@ -204,22 +200,16 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
           };
         }
       } else {
-        if (current.ongoingJobs != initial.ongoingJobs) {
-          fieldChanges['Ongoing Jobs'] = {
-            'old': initial.ongoingJobs ?? 0,
-            'new': current.ongoingJobs ?? 0,
+        if (current.newJobsAmount != initial.newJobsAmount) {
+          fieldChanges['New Job Amount'] = {
+            'old': initial.newJobsAmount ?? 0.0,
+            'new': current.newJobsAmount ?? 0.0,
           };
         }
-        if (current.newJobs != initial.newJobs) {
-          fieldChanges['New Jobs'] = {
-            'old': initial.newJobs ?? 0,
-            'new': current.newJobs ?? 0,
-          };
-        }
-        if (current.outstandingJobs != initial.outstandingJobs) {
-          fieldChanges['Outstanding Jobs'] = {
-            'old': initial.outstandingJobs ?? 0,
-            'new': current.outstandingJobs ?? 0,
+        if (current.outstandingJobsAmount != initial.outstandingJobsAmount) {
+          fieldChanges['Outstanding Amount'] = {
+            'old': initial.outstandingJobsAmount ?? 0.0,
+            'new': current.outstandingJobsAmount ?? 0.0,
           };
         }
       }
@@ -252,13 +242,29 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
     );
   }
 
+  void updateAccountsAmounts(int sectionId, {double? newJobsAmount, double? outstandingJobsAmount}) {
+    final updatedList = state.entries.map((item) {
+      if (item.sectionId == sectionId) {
+        if (newJobsAmount != null) item.newJobsAmount = newJobsAmount;
+        if (outstandingJobsAmount != null) item.outstandingJobsAmount = outstandingJobsAmount;
+        item.amount = (item.newJobsAmount ?? 0.0) + (item.outstandingJobsAmount ?? 0.0);
+      }
+      return item;
+    }).toList();
+
+    final totals = _computeTotals(updatedList);
+    state = state.copyWith(
+      entries: updatedList,
+      liveTotal1: totals['total1'] ?? 0.0,
+      liveTotal2: totals['total2'] ?? 0.0,
+      isDirty: true,
+    );
+  }
+
   void updateJobCount(int sectionId, {int? jobsCompleted, int? ongoing, int? newJobs, int? outstanding}) {
     final updatedList = state.entries.map((item) {
       if (item.sectionId == sectionId) {
         if (jobsCompleted != null) item.jobsCompleted = jobsCompleted;
-        if (ongoing != null) item.ongoingJobs = ongoing;
-        if (newJobs != null) item.newJobs = newJobs;
-        if (outstanding != null) item.outstandingJobs = outstanding;
       }
       return item;
     }).toList();
@@ -272,14 +278,12 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
   Map<String, double> _computeTotals(List<SectionEntryInput> list) {
     double t1 = 0.0;
     double t2 = 0.0;
-
     for (final item in list) {
       t2 += item.amount;
       if (item.inCoreTotal) {
         t1 += item.amount;
       }
     }
-
     return {
       'total1': double.parse(t1.toStringAsFixed(2)),
       'total2': double.parse(t2.toStringAsFixed(2)),
@@ -299,7 +303,7 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
       state = state.copyWith(
         isSaving: false,
         isDirty: false,
-        successMessage: 'Entries for $slot on $date saved successfully!',
+        successMessage: 'Entries for $date ($slot) saved successfully.',
       );
       return true;
     } on DioException catch (e) {
@@ -307,7 +311,7 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
       state = state.copyWith(isSaving: false, errorMessage: err.message);
       return false;
     } catch (e) {
-      state = state.copyWith(isSaving: false, errorMessage: 'Failed to save entries');
+      state = state.copyWith(isSaving: false, errorMessage: 'Failed to save entries: $e');
       return false;
     }
   }
@@ -317,11 +321,11 @@ class EntryFormNotifier extends StateNotifier<EntryFormState> {
   }
 }
 
+// Provider for EntryFormNotifier parameterized by sections
 final entryFormNotifierProvider = StateNotifierProvider<EntryFormNotifier, EntryFormState>((ref) {
   final dio = ref.watch(dioProvider);
   final sectionsAsync = ref.watch(sectionsProvider);
 
-  final sections = sectionsAsync.asData?.value ?? [];
+  final sections = sectionsAsync.value ?? [];
   return EntryFormNotifier(dio, sections);
 });
-

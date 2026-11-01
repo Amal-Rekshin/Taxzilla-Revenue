@@ -107,9 +107,9 @@ describe('Phase 6: Audit, History & Dashboard API Tests', () => {
 
     expect(allRes.status).toBe(200);
     expect(allRes.body.entries.length).toBe(30); // September has 30 days
-    // Newest first
-    expect(allRes.body.entries[0].date).toBe('2026-09-30');
-    expect(allRes.body.entries[allRes.body.entries.length - 1].date).toBe('2026-09-01');
+    // Ascending chronological order (day 1 to last day)
+    expect(allRes.body.entries[0].date).toBe('2026-09-01');
+    expect(allRes.body.entries[allRes.body.entries.length - 1].date).toBe('2026-09-30');
 
     // Test filter=edited (must include 2026-09-10)
     const editedRes = await request(app)

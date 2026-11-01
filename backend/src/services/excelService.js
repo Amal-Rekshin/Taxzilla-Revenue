@@ -1,82 +1,69 @@
 const ExcelJS = require('exceljs');
-const { compileMonthlyReport } = require('./calculationService');
+const { calculateDayTotals } = require('./calculationService');
 
-function getMonthSheetName(yearMonth) {
-  const [year, month] = yearMonth.split('-').map(Number);
-  const date = new Date(Date.UTC(year, month - 1, 1));
-  const monthName = date.toLocaleString('en-US', { month: 'short', timeZone: 'UTC' });
-  return `${monthName} ${year}`;
-}
+const CURRENCY_FORMAT = '₹#,##0.00';
+const INTEGER_FORMAT = '#,##0';
 
 /**
- * Generate Excel workbook for a selected month using ExcelJS
+ * Generates the official multi-sheet Excel workbook for a calendar month.
  * 
- * @param {string} yearMonth - Format 'YYYY-MM'
+ * Rules:
+ * - Sheet 1: Evening (official numbers, used for all totals)
+ * - Sheet 2: Afternoon (reference only)
+ * - Sections Order: EXIM, GST, REGISTRATION, CRO, ACCOUNTS, MARKETING
+ * - Total 1 formula: =B + C + D + E (EXIM + GST + REGISTRATION + CRO)
+ * - Total 2 formula: =SUM(B:G)
+ * - Week Total rows use Excel formulas =SUM(...) for natural 7-day groups
+ * - Monthly Total row at the bottom sums all Week Total rows using formulas
+ * - Brand styling: Purple (#753C8D) headers, Green (#85C041) Total 2, Soft Lavender week rows
+ * 
+ * @param {Object} report - Result of compileMonthlyReport
+ * @param {Array} afternoonRows - Raw dbRows for afternoon/morning reference slot
  * @param {Array} sections - Ordered list of sections
- * @param {Array} dbRows - All raw entries for the month (both MORNING and EVENING)
- * @returns {Promise<ExcelJS.Workbook>}
+ * @returns {Promise<Buffer>} Excel file buffer
  */
-async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
+async function generateMonthlyExcelWorkbook(report, afternoonRows, sections) {
   const workbook = new ExcelJS.Workbook();
-  workbook.creator = 'Daily Revenue Tracker';
+  workbook.creator = 'RevPulse Daily Revenue Tracker';
   workbook.created = new Date();
 
-  // 1. Calculate compiled report using shared calculation service
-  const report = compileMonthlyReport(yearMonth, sections, dbRows);
-
-  // Currency format for Rupee
-  const CURRENCY_FORMAT = '[$₹-en-IN] #,##0.00';
-  const INTEGER_FORMAT = '#,##0';
-
-  const headerFill = {
-    type: 'pattern',
-    pattern: 'solid',
-    fgColor: { argb: 'FF753C8D' }, // Brand Purple #753C8D
-  };
   const headerFont = {
     name: 'Calibri',
     size: 11,
     bold: true,
     color: { argb: 'FFFFFFFF' },
   };
-  const totalRowFont = {
-    name: 'Calibri',
-    size: 11,
-    bold: true,
-  };
-  const totalRowFill = {
+
+  const headerFill = {
     type: 'pattern',
     pattern: 'solid',
-    fgColor: { argb: 'FFF2F4F7' },
+    fgColor: { argb: 'FF753C8D' }, // Brand Purple
   };
 
   // ==========================================
-  // SHEET 1: Evening Data (Active Reporting)
+  // SHEET 1: Evening (Official)
   // ==========================================
-  const sheetName = getMonthSheetName(yearMonth);
-  const sheet = workbook.addWorksheet(sheetName, {
+  const sheet = workbook.addWorksheet('Evening (Official)', {
     views: [{ state: 'frozen', xSplit: 1, ySplit: 1 }],
   });
 
-  // Columns A through Q
   sheet.columns = [
     { header: 'Date', key: 'date', width: 14 },
     { header: 'EXIM', key: 'exim', width: 15, style: { numFmt: CURRENCY_FORMAT } },
-    { header: 'CRO', key: 'cro', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'GST', key: 'gst', width: 15, style: { numFmt: CURRENCY_FORMAT } },
-    { header: 'Accounts', key: 'accounts', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Registration', key: 'registration', width: 15, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'CRO', key: 'cro', width: 15, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'Accounts', key: 'accounts', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Marketing', key: 'marketing', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Total 1', key: 'total1', width: 16, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Total 2', key: 'total2', width: 16, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'EXIM Jobs', key: 'exim_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'CRO Jobs', key: 'cro_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'GST Jobs', key: 'gst_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'Registration Jobs', key: 'reg_jobs', width: 17, style: { numFmt: INTEGER_FORMAT } },
+    { header: 'CRO Jobs', key: 'cro_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'Marketing Jobs', key: 'mkt_jobs', width: 15, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc Ongoing', key: 'acc_ongoing', width: 14, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc New', key: 'acc_new', width: 13, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc Outstanding', key: 'acc_outstanding', width: 16, style: { numFmt: INTEGER_FORMAT } },
+    { header: 'Acc New (₹)', key: 'acc_new_amt', width: 16, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'Acc Outstanding (₹)', key: 'acc_outstanding_amt', width: 18, style: { numFmt: CURRENCY_FORMAT } },
   ];
 
   // Style header row
@@ -116,28 +103,28 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
 
     if (day.status === 'COMPLETE') {
       row.getCell('B').value = day.amounts.EXIM || 0;
-      row.getCell('C').value = day.amounts.CRO || 0;
-      row.getCell('D').value = day.amounts.GST || 0;
-      row.getCell('E').value = day.amounts.ACCOUNTS || 0;
-      row.getCell('F').value = day.amounts.REGISTRATION || 0;
+      row.getCell('C').value = day.amounts.GST || 0;
+      row.getCell('D').value = day.amounts.REGISTRATION || 0;
+      row.getCell('E').value = day.amounts.CRO || 0;
+      row.getCell('F').value = day.amounts.ACCOUNTS || 0;
       row.getCell('G').value = day.amounts.MARKETING || 0;
 
-      // Row formulas as strictly specified:
-      row.getCell('H').value = { formula: `B${currentRow}+C${currentRow}+D${currentRow}+F${currentRow}`, result: day.total1 };
+      // Core Total 1 = EXIM + GST + REGISTRATION + CRO (B + C + D + E)
+      row.getCell('H').value = { formula: `B${currentRow}+C${currentRow}+D${currentRow}+E${currentRow}`, result: day.total1 };
+      // Grand Total 2 = SUM(B:G)
       row.getCell('I').value = { formula: `SUM(B${currentRow}:G${currentRow})`, result: day.total2 };
 
       row.getCell('J').value = day.jobs.EXIM || 0;
-      row.getCell('K').value = day.jobs.CRO || 0;
-      row.getCell('L').value = day.jobs.GST || 0;
-      row.getCell('M').value = day.jobs.REGISTRATION || 0;
+      row.getCell('K').value = day.jobs.GST || 0;
+      row.getCell('L').value = day.jobs.REGISTRATION || 0;
+      row.getCell('M').value = day.jobs.CRO || 0;
       row.getCell('N').value = day.jobs.MARKETING || 0;
 
-      row.getCell('O').value = day.accounts.ongoing_jobs || 0;
-      row.getCell('P').value = day.accounts.new_jobs || 0;
-      row.getCell('Q').value = day.accounts.outstanding_jobs || 0;
+      row.getCell('O').value = day.accounts.new_jobs_amount || 0;
+      row.getCell('P').value = day.accounts.outstanding_jobs_amount || 0;
     } else {
       // Pending or Sunday: cells are blank for financial columns
-      for (let c = 2; c <= 17; c++) {
+      for (let c = 2; c <= 16; c++) {
         row.getCell(c).value = null;
       }
     }
@@ -162,11 +149,10 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
         weekTotalRow.getCell(col).value = { formula: `SUM(${col}${weekStartRow}:${col}${weekEndRow})` };
       }
 
-      // Accounts: O & Q are static running balances at week end, P is sum
+      // Accounts: O is sum of new_jobs_amount, P is running balance of outstanding_jobs_amount
       if (currentWeek) {
-        weekTotalRow.getCell('O').value = currentWeek.totals.accounts.ongoing_jobs;
-        weekTotalRow.getCell('P').value = { formula: `SUM(P${weekStartRow}:P${weekEndRow})` };
-        weekTotalRow.getCell('Q').value = currentWeek.totals.accounts.outstanding_jobs;
+        weekTotalRow.getCell('O').value = { formula: `SUM(O${weekStartRow}:O${weekEndRow})` };
+        weekTotalRow.getCell('P').value = currentWeek.totals.accounts.outstanding_jobs_amount;
       }
 
       // Style week total row
@@ -174,8 +160,8 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
         cell.font = weekTotalRowFont;
         cell.fill = weekTotalRowFill;
         cell.border = {
-          top: { style: 'thin' },
-          bottom: { style: 'thin' },
+          top: { style: 'thin', color: { argb: 'FFD8B4FE' } },
+          bottom: { style: 'thin', color: { argb: 'FFD8B4FE' } },
         };
       });
 
@@ -187,9 +173,21 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
     currentRow++;
   }
 
-  // Final "Month Total" row
+  // Monthly Grand Total row
   const totalRow = sheet.getRow(currentRow);
   totalRow.height = 24;
+
+  const totalRowFont = {
+    name: 'Calibri',
+    size: 11,
+    bold: true,
+    color: { argb: 'FF1F2937' },
+  };
+  const totalRowFill = {
+    type: 'pattern',
+    pattern: 'solid',
+    fgColor: { argb: 'FFE5E7EB' }, // Light gray
+  };
 
   totalRow.getCell('A').value = 'Month Total';
   totalRow.getCell('A').alignment = { vertical: 'middle', horizontal: 'center' };
@@ -200,11 +198,10 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
     totalRow.getCell(col).value = { formula: weekTotalRowNumbers.map(r => `${col}${r}`).join('+') };
   }
 
-  // O and Q hold the last-day static values from calculateAccountsRunningBalances
-  totalRow.getCell('O').value = report.monthTotals.accounts.ongoing_jobs;
-  // P is sum of week new jobs
-  totalRow.getCell('P').value = { formula: weekTotalRowNumbers.map(r => `P${r}`).join('+') };
-  totalRow.getCell('Q').value = report.monthTotals.accounts.outstanding_jobs;
+  // O is sum of all week total O's
+  totalRow.getCell('O').value = { formula: weekTotalRowNumbers.map(r => `O${r}`).join('+') };
+  // P holds the last-day running balance from calculateAccountsRunningBalances
+  totalRow.getCell('P').value = report.monthTotals.accounts.outstanding_jobs_amount;
 
   // Style total row
   totalRow.eachCell((cell) => {
@@ -226,19 +223,18 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
   morningSheet.columns = [
     { header: 'Date', key: 'date', width: 14 },
     { header: 'EXIM', key: 'exim', width: 15, style: { numFmt: CURRENCY_FORMAT } },
-    { header: 'CRO', key: 'cro', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'GST', key: 'gst', width: 15, style: { numFmt: CURRENCY_FORMAT } },
-    { header: 'Accounts', key: 'accounts', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Registration', key: 'registration', width: 15, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'CRO', key: 'cro', width: 15, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'Accounts', key: 'accounts', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'Marketing', key: 'marketing', width: 15, style: { numFmt: CURRENCY_FORMAT } },
     { header: 'EXIM Jobs', key: 'exim_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'CRO Jobs', key: 'cro_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'GST Jobs', key: 'gst_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'Registration Jobs', key: 'reg_jobs', width: 17, style: { numFmt: INTEGER_FORMAT } },
+    { header: 'CRO Jobs', key: 'cro_jobs', width: 13, style: { numFmt: INTEGER_FORMAT } },
     { header: 'Marketing Jobs', key: 'mkt_jobs', width: 15, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc Ongoing', key: 'acc_ongoing', width: 14, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc New', key: 'acc_new', width: 13, style: { numFmt: INTEGER_FORMAT } },
-    { header: 'Acc Outstanding', key: 'acc_outstanding', width: 16, style: { numFmt: INTEGER_FORMAT } },
+    { header: 'Acc New (₹)', key: 'acc_new_amt', width: 16, style: { numFmt: CURRENCY_FORMAT } },
+    { header: 'Acc Outstanding (₹)', key: 'acc_outstanding_amt', width: 18, style: { numFmt: CURRENCY_FORMAT } },
   ];
 
   const mHeaderRow = morningSheet.getRow(1);
@@ -253,61 +249,60 @@ async function generateMonthlyExcelWorkbook(yearMonth, sections, dbRows) {
     cell.alignment = { vertical: 'middle', horizontal: 'center' };
   });
 
-  // Map afternoon entries
-  const morningMap = new Map();
-  for (const row of dbRows) {
-    if (row.slot === 'MORNING' || row.slot === 'AFTERNOON') {
-      const dateStr = typeof row.entry_date === 'string'
-        ? row.entry_date.substring(0, 10)
-        : `${row.entry_date.getFullYear()}-${String(row.entry_date.getMonth() + 1).padStart(2, '0')}-${String(row.entry_date.getDate()).padStart(2, '0')}`;
-      if (!morningMap.has(dateStr)) {
-        morningMap.set(dateStr, new Map());
+  // Index afternoon rows by date and section_id
+  function toDateString(val) {
+    if (typeof val === 'string') return val.substring(0, 10);
+    const y = val.getFullYear();
+    const m = String(val.getMonth() + 1).padStart(2, '0');
+    const d = String(val.getDate()).padStart(2, '0');
+    return `${y}-${m}-${d}`;
+  }
+
+  const morningEntryMap = new Map();
+  if (Array.isArray(afternoonRows)) {
+    for (const r of afternoonRows) {
+      if (r.slot === 'AFTERNOON' || r.slot === 'MORNING') {
+        const dStr = toDateString(r.entry_date);
+        if (!morningEntryMap.has(dStr)) {
+          morningEntryMap.set(dStr, new Map());
+        }
+        morningEntryMap.get(dStr).set(r.section_id, r);
       }
-      morningMap.get(dateStr).set(row.section_id, row);
     }
   }
 
   for (let i = 0; i < numDays; i++) {
     const day = report.days[i];
-    const r = i + 2;
-    const row = morningSheet.getRow(r);
+    const row = morningSheet.getRow(i + 2);
     row.height = 20;
 
-    row.getCell('A').value = day.date;
+    row.getCell('A').value = day.isSunday ? `${day.date} (Sun)` : day.date;
     row.getCell('A').alignment = { vertical: 'middle', horizontal: 'center' };
 
-    const mEntries = morningMap.get(day.date);
-    if (mEntries) {
+    const mSecMap = morningEntryMap.get(day.date);
+    if (mSecMap && mSecMap.size > 0) {
+      let cIdx = 2;
       for (const sec of sections) {
-        const ent = mEntries.get(sec.id);
-        const amt = ent && ent.amount !== null ? parseFloat(ent.amount) : 0;
-        if (sec.code === 'EXIM') row.getCell('B').value = amt;
-        if (sec.code === 'CRO') row.getCell('C').value = amt;
-        if (sec.code === 'GST') row.getCell('D').value = amt;
-        if (sec.code === 'ACCOUNTS') row.getCell('E').value = amt;
-        if (sec.code === 'REGISTRATION') row.getCell('F').value = amt;
-        if (sec.code === 'MARKETING') row.getCell('G').value = amt;
-
+        const ent = mSecMap.get(sec.id);
+        row.getCell(cIdx++).value = ent && ent.amount !== null ? parseFloat(ent.amount) : 0;
+      }
+      for (const sec of sections) {
+        const ent = mSecMap.get(sec.id);
         if (sec.count_type === 'SINGLE') {
-          const jc = ent && ent.jobs_completed !== null ? ent.jobs_completed : 0;
-          if (sec.code === 'EXIM') row.getCell('H').value = jc;
-          if (sec.code === 'CRO') row.getCell('I').value = jc;
-          if (sec.code === 'GST') row.getCell('J').value = jc;
-          if (sec.code === 'REGISTRATION') row.getCell('K').value = jc;
-          if (sec.code === 'MARKETING') row.getCell('L').value = jc;
-        } else if (sec.count_type === 'TRIPLE') {
-          row.getCell('M').value = ent && ent.ongoing_jobs !== null ? ent.ongoing_jobs : 0;
-          row.getCell('N').value = ent && ent.new_jobs !== null ? ent.new_jobs : 0;
-          row.getCell('O').value = ent && ent.outstanding_jobs !== null ? ent.outstanding_jobs : 0;
+          row.getCell(cIdx++).value = ent && ent.jobs_completed !== null ? ent.jobs_completed : 0;
+        } else if (sec.count_type === 'TRIPLE' || sec.code === 'ACCOUNTS') {
+          row.getCell(cIdx++).value = ent && ent.new_jobs_amount !== null ? parseFloat(ent.new_jobs_amount) : 0;
+          row.getCell(cIdx++).value = ent && ent.outstanding_jobs_amount !== null ? parseFloat(ent.outstanding_jobs_amount) : 0;
         }
       }
     }
   }
 
-  return workbook;
+  // Return generated buffer
+  const buffer = await workbook.xlsx.writeBuffer();
+  return buffer;
 }
 
 module.exports = {
   generateMonthlyExcelWorkbook,
-  getMonthSheetName,
 };

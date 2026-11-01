@@ -26,6 +26,8 @@ async function fetchEntriesForMonth(yearMonth) {
       e.section_id,
       e.slot,
       e.amount,
+      e.new_jobs_amount,
+      e.outstanding_jobs_amount,
       e.jobs_completed,
       e.ongoing_jobs,
       e.new_jobs,

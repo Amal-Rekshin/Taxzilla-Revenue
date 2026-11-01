@@ -22,6 +22,7 @@ async function getHealth(req, res) {
   const responseData = {
     status: isHealthy ? 'ok' : 'degraded',
     service: 'RevPulse Backend API',
+    environment: process.env.NODE_ENV || 'development',
     uptime: Math.floor(process.uptime()),
     timestamp: new Date().toISOString(),
     database: {

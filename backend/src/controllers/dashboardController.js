@@ -64,9 +64,11 @@ async function getDashboard(req, res, next) {
 
     // 4. Accounts card
     const accounts = {
-      ongoing: currentReport.monthTotals.accounts.ongoing_jobs,
-      newJobs: currentReport.monthTotals.accounts.new_jobs,
-      outstanding: currentReport.monthTotals.accounts.outstanding_jobs,
+      newJobsAmount: currentReport.monthTotals.accounts.new_jobs_amount || 0,
+      outstandingAmount: currentReport.monthTotals.accounts.outstanding_jobs_amount || 0,
+      ongoing: 0,
+      newJobs: 0,
+      outstanding: 0,
     };
 
     // 5. Daily trend chart (Total 1 and Total 2 for each calendar day)

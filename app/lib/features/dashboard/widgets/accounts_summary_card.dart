@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import '../../../core/theme/app_theme.dart';
+import '../../../core/utils/currency_formatter.dart';
 import '../models/dashboard_model.dart';
 
 class AccountsSummaryCard extends StatelessWidget {
@@ -43,7 +44,7 @@ class AccountsSummaryCard extends StatelessWidget {
                 ),
                 const SizedBox(width: 8),
                 const Text(
-                  'Jobs Status Overview',
+                  'Revenue Status Overview',
                   style: TextStyle(
                     fontSize: 15,
                     fontWeight: FontWeight.bold,
@@ -57,26 +58,17 @@ class AccountsSummaryCard extends StatelessWidget {
               children: [
                 Expanded(
                   child: _buildMetricTile(
-                    label: 'Ongoing Jobs',
-                    value: accounts.ongoing.toString(),
-                    sublabel: 'Latest Balance',
-                    color: const Color(0xFF0284C7),
-                  ),
-                ),
-                const SizedBox(width: 8),
-                Expanded(
-                  child: _buildMetricTile(
-                    label: 'New Jobs',
-                    value: accounts.newJobs.toString(),
+                    label: 'New Jobs Amount',
+                    value: CurrencyFormatter.format(accounts.newJobsAmount),
                     sublabel: 'Month Sum',
                     color: AppTheme.success,
                   ),
                 ),
-                const SizedBox(width: 8),
+                const SizedBox(width: 12),
                 Expanded(
                   child: _buildMetricTile(
-                    label: 'Outstanding',
-                    value: accounts.outstanding.toString(),
+                    label: 'Outstanding Amount',
+                    value: CurrencyFormatter.format(accounts.outstandingAmount),
                     sublabel: 'Latest Balance',
                     color: const Color(0xFFE11D48),
                   ),
@@ -96,40 +88,45 @@ class AccountsSummaryCard extends StatelessWidget {
     required Color color,
   }) {
     return Container(
-      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 12),
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 12),
       decoration: BoxDecoration(
         color: color.withValues(alpha: 0.06),
         borderRadius: BorderRadius.circular(8),
         border: Border.all(color: color.withValues(alpha: 0.2)),
       ),
       child: Column(
+        crossAxisAlignment: CrossAxisAlignment.start,
         children: [
-          Text(
-            value,
-            style: TextStyle(
-              fontSize: 20,
-              fontWeight: FontWeight.bold,
-              color: color,
+          FittedBox(
+            fit: BoxFit.scaleDown,
+            child: Text(
+              value,
+              style: TextStyle(
+                fontSize: 18,
+                fontWeight: FontWeight.w800,
+                color: color,
+                letterSpacing: -0.3,
+              ),
             ),
           ),
           const SizedBox(height: 4),
           Text(
             label,
             style: const TextStyle(
-              fontSize: 11,
+              fontSize: 12,
               fontWeight: FontWeight.w600,
               color: AppTheme.textPrimary,
             ),
-            textAlign: TextAlign.center,
           ),
           Text(
             sublabel,
-            style: const TextStyle(fontSize: 9, color: AppTheme.textSecondary),
-            textAlign: TextAlign.center,
+            style: const TextStyle(
+              fontSize: 10,
+              color: AppTheme.textSecondary,
+            ),
           ),
         ],
       ),
     );
   }
 }
-

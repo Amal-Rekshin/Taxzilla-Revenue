@@ -1,3 +1,8 @@
+const dns = require('dns');
+if (dns.setDefaultResultOrder) {
+  dns.setDefaultResultOrder('ipv4first');
+}
+
 const dotenv = require('dotenv');
 const path = require('path');
 
@@ -9,4 +14,3 @@ const PORT = process.env.PORT || 3000;
 app.listen(PORT, () => {
   console.log(`[Server] Daily Revenue Tracker API running on http://localhost:${PORT}`);
 });
-

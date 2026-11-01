@@ -31,21 +31,27 @@ class DashboardSectionItem {
 }
 
 class DashboardAccountsModel {
+  final double newJobsAmount;
+  final double outstandingAmount;
   final int ongoing;
   final int newJobs;
   final int outstanding;
 
   const DashboardAccountsModel({
-    required this.ongoing,
-    required this.newJobs,
-    required this.outstanding,
+    required this.newJobsAmount,
+    required this.outstandingAmount,
+    this.ongoing = 0,
+    this.newJobs = 0,
+    this.outstanding = 0,
   });
 
   factory DashboardAccountsModel.fromJson(Map<String, dynamic> json) {
     return DashboardAccountsModel(
-      ongoing: json['ongoing'] as int? ?? 0,
-      newJobs: json['newJobs'] as int? ?? 0,
-      outstanding: json['outstanding'] as int? ?? 0,
+      newJobsAmount: (json['newJobsAmount'] as num?)?.toDouble() ?? 0.0,
+      outstandingAmount: (json['outstandingAmount'] as num?)?.toDouble() ?? 0.0,
+      ongoing: (json['ongoing'] as num?)?.toInt() ?? 0,
+      newJobs: (json['newJobs'] as num?)?.toInt() ?? 0,
+      outstanding: (json['outstanding'] as num?)?.toInt() ?? 0,
     );
   }
 }

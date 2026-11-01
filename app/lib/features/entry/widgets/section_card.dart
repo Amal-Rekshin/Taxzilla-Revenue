@@ -7,12 +7,14 @@ class SectionCard extends StatefulWidget {
   final SectionEntryInput entry;
   final ValueChanged<double> onAmountChanged;
   final void Function({int? jobsCompleted, int? ongoing, int? newJobs, int? outstanding}) onJobCountsChanged;
+  final void Function({double? newJobsAmount, double? outstandingJobsAmount})? onAccountsAmountsChanged;
 
   const SectionCard({
     super.key,
     required this.entry,
     required this.onAmountChanged,
     required this.onJobCountsChanged,
+    this.onAccountsAmountsChanged,
   });
 
   @override
@@ -22,9 +24,8 @@ class SectionCard extends StatefulWidget {
 class _SectionCardState extends State<SectionCard> {
   late TextEditingController _amountController;
   late TextEditingController _jobsController;
-  late TextEditingController _ongoingController;
-  late TextEditingController _newJobsController;
-  late TextEditingController _outstandingController;
+  late TextEditingController _newJobsAmountController;
+  late TextEditingController _outstandingAmountController;
 
   @override
   void initState() {
@@ -35,14 +36,11 @@ class _SectionCardState extends State<SectionCard> {
     _jobsController = TextEditingController(
       text: widget.entry.jobsCompleted != null ? widget.entry.jobsCompleted.toString() : '',
     );
-    _ongoingController = TextEditingController(
-      text: widget.entry.ongoingJobs != null ? widget.entry.ongoingJobs.toString() : '',
+    _newJobsAmountController = TextEditingController(
+      text: (widget.entry.newJobsAmount ?? 0) > 0 ? widget.entry.newJobsAmount!.toStringAsFixed(2) : '',
     );
-    _newJobsController = TextEditingController(
-      text: widget.entry.newJobs != null ? widget.entry.newJobs.toString() : '',
-    );
-    _outstandingController = TextEditingController(
-      text: widget.entry.outstandingJobs != null ? widget.entry.outstandingJobs.toString() : '',
+    _outstandingAmountController = TextEditingController(
+      text: (widget.entry.outstandingJobsAmount ?? 0) > 0 ? widget.entry.outstandingJobsAmount!.toStringAsFixed(2) : '',
     );
   }
 
@@ -55,18 +53,16 @@ class _SectionCardState extends State<SectionCard> {
         _amountController.text = text;
       }
     }
-    if (widget.entry.countType == 'SINGLE') {
+    if (!widget.entry.isTriple) {
       final jcText = (widget.entry.jobsCompleted ?? 0).toString();
       if (_jobsController.text != jcText) {
         _jobsController.text = jcText;
       }
     } else {
-      final onText = (widget.entry.ongoingJobs ?? 0).toString();
-      final newText = (widget.entry.newJobs ?? 0).toString();
-      final outText = (widget.entry.outstandingJobs ?? 0).toString();
-      if (_ongoingController.text != onText) _ongoingController.text = onText;
-      if (_newJobsController.text != newText) _newJobsController.text = newText;
-      if (_outstandingController.text != outText) _outstandingController.text = outText;
+      final njaText = (widget.entry.newJobsAmount ?? 0) > 0 ? widget.entry.newJobsAmount!.toStringAsFixed(2) : '';
+      final ojaText = (widget.entry.outstandingJobsAmount ?? 0) > 0 ? widget.entry.outstandingJobsAmount!.toStringAsFixed(2) : '';
+      if (_newJobsAmountController.text != njaText) _newJobsAmountController.text = njaText;
+      if (_outstandingAmountController.text != ojaText) _outstandingAmountController.text = ojaText;
     }
   }
 
@@ -74,15 +70,14 @@ class _SectionCardState extends State<SectionCard> {
   void dispose() {
     _amountController.dispose();
     _jobsController.dispose();
-    _ongoingController.dispose();
-    _newJobsController.dispose();
-    _outstandingController.dispose();
+    _newJobsAmountController.dispose();
+    _outstandingAmountController.dispose();
     super.dispose();
   }
 
   @override
   Widget build(BuildContext context) {
-    final isTriple = widget.entry.countType == 'TRIPLE';
+    final isAccounts = widget.entry.isTriple || widget.entry.code == 'ACCOUNTS';
 
     return Card(
       elevation: 1.5,
@@ -155,28 +150,38 @@ class _SectionCardState extends State<SectionCard> {
             ),
             const SizedBox(height: 14),
 
-            // Amount Field
+            // Amount Field: Disabled for ACCOUNTS (auto-calculated from New Job & Outstanding), editable for others
             TextFormField(
               controller: _amountController,
+              enabled: !isAccounts,
               keyboardType: const TextInputOption(decimal: true),
               inputFormatters: [
                 FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
               ],
-              decoration: const InputDecoration(
-                labelText: 'Amount (₹)',
+              decoration: InputDecoration(
+                labelText: isAccounts ? 'Total Amount (₹) [Auto-calculated]' : 'Amount (₹)',
                 prefixText: '₹ ',
-                prefixStyle: TextStyle(fontWeight: FontWeight.bold, color: AppTheme.primary),
+                prefixStyle: TextStyle(
+                  fontWeight: FontWeight.bold,
+                  color: isAccounts ? AppTheme.textSecondary : AppTheme.primary,
+                ),
                 hintText: '0.00',
+                filled: isAccounts,
+                fillColor: isAccounts ? Colors.grey.shade100 : null,
+                helperText: isAccounts ? 'Auto-calculated sum of New Job and Outstanding amounts' : null,
+                helperStyle: const TextStyle(color: AppTheme.textSecondary, fontSize: 11),
               ),
               onChanged: (val) {
-                final amount = double.tryParse(val) ?? 0.0;
-                widget.onAmountChanged(amount);
+                if (!isAccounts) {
+                  final amount = double.tryParse(val) ?? 0.0;
+                  widget.onAmountChanged(amount);
+                }
               },
             ),
             const SizedBox(height: 12),
 
-            // Job Counts based on count_type
-            if (!isTriple)
+            // Fields based on section
+            if (!isAccounts)
               TextFormField(
                 controller: _jobsController,
                 keyboardType: TextInputType.number,
@@ -192,12 +197,12 @@ class _SectionCardState extends State<SectionCard> {
                 },
               )
             else
-              // ACCOUNTS TRIPLE COUNTS
+              // ACCOUNTS: Separate New Job Amount and Outstanding Amount inputs (No Ongoing, No Job Counts)
               Column(
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   const Text(
-                    'Job Status Counts',
+                    'Accounts Revenue Breakdown',
                     style: TextStyle(
                       fontSize: 12,
                       fontWeight: FontWeight.w600,
@@ -209,48 +214,40 @@ class _SectionCardState extends State<SectionCard> {
                     children: [
                       Expanded(
                         child: TextFormField(
-                          controller: _ongoingController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          controller: _newJobsAmountController,
+                          keyboardType: const TextInputOption(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                          ],
                           decoration: const InputDecoration(
-                            labelText: 'Ongoing',
-                            hintText: '0',
+                            labelText: 'New Job Amount (₹)',
+                            prefixText: '₹ ',
+                            prefixStyle: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary),
+                            hintText: '0.00',
                           ),
                           onChanged: (val) {
-                            final count = int.tryParse(val) ?? 0;
-                            widget.onJobCountsChanged(ongoing: count);
+                            final amt = double.tryParse(val) ?? 0.0;
+                            widget.onAccountsAmountsChanged?.call(newJobsAmount: amt);
                           },
                         ),
                       ),
-                      const SizedBox(width: 8),
+                      const SizedBox(width: 12),
                       Expanded(
                         child: TextFormField(
-                          controller: _newJobsController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
+                          controller: _outstandingAmountController,
+                          keyboardType: const TextInputOption(decimal: true),
+                          inputFormatters: [
+                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
+                          ],
                           decoration: const InputDecoration(
-                            labelText: 'New Job',
-                            hintText: '0',
+                            labelText: 'Outstanding Amount (₹)',
+                            prefixText: '₹ ',
+                            prefixStyle: TextStyle(fontWeight: FontWeight.w600, color: AppTheme.primary),
+                            hintText: '0.00',
                           ),
                           onChanged: (val) {
-                            final count = int.tryParse(val) ?? 0;
-                            widget.onJobCountsChanged(newJobs: count);
-                          },
-                        ),
-                      ),
-                      const SizedBox(width: 8),
-                      Expanded(
-                        child: TextFormField(
-                          controller: _outstandingController,
-                          keyboardType: TextInputType.number,
-                          inputFormatters: [FilteringTextInputFormatter.digitsOnly],
-                          decoration: const InputDecoration(
-                            labelText: 'Outstanding',
-                            hintText: '0',
-                          ),
-                          onChanged: (val) {
-                            final count = int.tryParse(val) ?? 0;
-                            widget.onJobCountsChanged(outstanding: count);
+                            final amt = double.tryParse(val) ?? 0.0;
+                            widget.onAccountsAmountsChanged?.call(outstandingJobsAmount: amt);
                           },
                         ),
                       ),
@@ -269,4 +266,3 @@ class TextInputOption extends TextInputType {
   const TextInputOption({required bool decimal})
       : super.numberWithOptions(signed: false, decimal: decimal);
 }
-

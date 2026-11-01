@@ -91,6 +91,8 @@ class DayDetailSectionItem {
   final bool inCoreTotal;
   final String countType;
   final double amount;
+  final double? newJobsAmount;
+  final double? outstandingJobsAmount;
   final int? jobsCompleted;
   final int? ongoingJobs;
   final int? newJobs;
@@ -104,6 +106,8 @@ class DayDetailSectionItem {
     required this.inCoreTotal,
     required this.countType,
     required this.amount,
+    this.newJobsAmount,
+    this.outstandingJobsAmount,
     this.jobsCompleted,
     this.ongoingJobs,
     this.newJobs,
@@ -119,6 +123,8 @@ class DayDetailSectionItem {
       inCoreTotal: json['in_core_total'] as bool? ?? false,
       countType: json['count_type']?.toString() ?? 'SINGLE',
       amount: double.tryParse(json['amount']?.toString() ?? '0') ?? 0.0,
+      newJobsAmount: double.tryParse(json['new_jobs_amount']?.toString() ?? ''),
+      outstandingJobsAmount: double.tryParse(json['outstanding_jobs_amount']?.toString() ?? ''),
       jobsCompleted: int.tryParse(json['jobs_completed']?.toString() ?? ''),
       ongoingJobs: int.tryParse(json['ongoing_jobs']?.toString() ?? ''),
       newJobs: int.tryParse(json['new_jobs']?.toString() ?? ''),

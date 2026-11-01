@@ -7,7 +7,15 @@ const singleEntryInputSchema = z.object({
   amount: z.union([
     z.number().min(0, 'Amount must be non-negative'),
     z.string().regex(/^\d+(\.\d{1,2})?$/, 'Amount must be a valid non-negative number with up to 2 decimal places'),
-  ]),
+  ]).optional().nullable(),
+  new_jobs_amount: z.union([
+    z.number().min(0, 'new_jobs_amount must be non-negative'),
+    z.string().regex(/^\d+(\.\d{1,2})?$/, 'new_jobs_amount must be a valid non-negative number'),
+  ]).optional().nullable(),
+  outstanding_jobs_amount: z.union([
+    z.number().min(0, 'outstanding_jobs_amount must be non-negative'),
+    z.string().regex(/^\d+(\.\d{1,2})?$/, 'outstanding_jobs_amount must be a valid non-negative number'),
+  ]).optional().nullable(),
   jobs_completed: z.number().int().min(0, 'jobs_completed must be non-negative').optional().nullable(),
   ongoing_jobs: z.number().int().min(0, 'ongoing_jobs must be non-negative').optional().nullable(),
   new_jobs: z.number().int().min(0, 'new_jobs must be non-negative').optional().nullable(),
@@ -97,29 +105,27 @@ async function validatePutEntries(date, slot, body) {
           error: `Section '${section.name}' (${section.code}) requires jobs_completed.`,
         };
       }
-      if (entry.ongoing_jobs != null || entry.new_jobs != null || entry.outstanding_jobs != null) {
+      if (entry.amount === undefined || entry.amount === null) {
         return {
           valid: false,
-          error: `Section '${section.name}' (${section.code}) has SINGLE count_type and must not send ongoing_jobs, new_jobs, or outstanding_jobs.`,
+          error: `Section '${section.name}' (${section.code}) requires amount.`,
         };
       }
-    } else if (section.count_type === 'TRIPLE') {
-      if (
-        entry.ongoing_jobs === undefined || entry.ongoing_jobs === null ||
-        entry.new_jobs === undefined || entry.new_jobs === null ||
-        entry.outstanding_jobs === undefined || entry.outstanding_jobs === null
-      ) {
-        return {
-          valid: false,
-          error: `Section '${section.name}' (${section.code}) requires ongoing_jobs, new_jobs, and outstanding_jobs.`,
-        };
-      }
-      if (entry.jobs_completed != null) {
-        return {
-          valid: false,
-          error: `Section '${section.name}' (${section.code}) has TRIPLE count_type and must not send jobs_completed.`,
-        };
-      }
+      entry.new_jobs_amount = 0;
+      entry.outstanding_jobs_amount = 0;
+    } else if (section.count_type === 'TRIPLE' || section.code === 'ACCOUNTS') {
+      // ACCOUNTS: No jobs_completed, no ongoing_jobs required
+      // Uses new_jobs_amount and outstanding_jobs_amount
+      // Auto-compute amount = new_jobs_amount + outstanding_jobs_amount
+      const nja = parseFloat(entry.new_jobs_amount != null ? entry.new_jobs_amount : (entry.amount || 0)) || 0;
+      const oja = parseFloat(entry.outstanding_jobs_amount != null ? entry.outstanding_jobs_amount : 0) || 0;
+      entry.new_jobs_amount = nja;
+      entry.outstanding_jobs_amount = oja;
+      entry.amount = (nja + oja).toFixed(2);
+      entry.jobs_completed = null;
+      entry.ongoing_jobs = null;
+      entry.new_jobs = null;
+      entry.outstanding_jobs = null;
     }
   }
 
@@ -127,14 +133,15 @@ async function validatePutEntries(date, slot, body) {
     valid: true,
     data: entries.map(e => ({
       section_id: e.section_id,
-      amount: typeof e.amount === 'number' ? e.amount.toFixed(2) : parseFloat(e.amount).toFixed(2),
+      amount: typeof e.amount === 'number' ? e.amount.toFixed(2) : parseFloat(e.amount || 0).toFixed(2),
+      new_jobs_amount: e.new_jobs_amount != null ? parseFloat(e.new_jobs_amount).toFixed(2) : '0.00',
+      outstanding_jobs_amount: e.outstanding_jobs_amount != null ? parseFloat(e.outstanding_jobs_amount).toFixed(2) : '0.00',
       jobs_completed: e.jobs_completed ?? null,
-      ongoing_jobs: e.ongoing_jobs ?? null,
-      new_jobs: e.new_jobs ?? null,
-      outstanding_jobs: e.outstanding_jobs ?? null,
+      ongoing_jobs: null,
+      new_jobs: null,
+      outstanding_jobs: null,
     })),
   };
 }
 
 module.exports = { validatePutEntries };
-

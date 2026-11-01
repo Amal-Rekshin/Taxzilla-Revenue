@@ -65,10 +65,10 @@ async function getEntriesHistoryList(req, res, next) {
       auditByDate.get(a.entry_date).push(a);
     }
 
-    // Generate days, newest first (daysInMonth down to 1)
+    // Generate days in ascending chronological order (1 to daysInMonth)
     const daysList = [];
 
-    for (let d = daysInMonth; d >= 1; d--) {
+    for (let d = 1; d <= daysInMonth; d++) {
       const dayStr = String(d).padStart(2, '0');
       const dateStr = `${month}-${dayStr}`;
 

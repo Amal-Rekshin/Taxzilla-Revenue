@@ -389,6 +389,13 @@ class _DailyEntryScreenState extends ConsumerState<DailyEntryScreen> {
                               onAmountChanged: (amt) {
                                 ref.read(entryFormNotifierProvider.notifier).updateAmount(entryItem.sectionId, amt);
                               },
+                              onAccountsAmountsChanged: ({newJobsAmount, outstandingJobsAmount}) {
+                                ref.read(entryFormNotifierProvider.notifier).updateAccountsAmounts(
+                                      entryItem.sectionId,
+                                      newJobsAmount: newJobsAmount,
+                                      outstandingJobsAmount: outstandingJobsAmount,
+                                    );
+                              },
                               onJobCountsChanged: ({jobsCompleted, ongoing, newJobs, outstanding}) {
                                 ref.read(entryFormNotifierProvider.notifier).updateJobCount(
                                       entryItem.sectionId,
