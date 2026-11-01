@@ -23,7 +23,10 @@ final entriesHistoryProvider = FutureProvider<List<HistoryDayItem>>((ref) async 
       'filter': filter,
     });
     final rawList = response.data['entries'] as List<dynamic>? ?? [];
-    return rawList.map((e) => HistoryDayItem.fromJson(e as Map<String, dynamic>)).toList();
+    final items = rawList.map((e) => HistoryDayItem.fromJson(e as Map<String, dynamic>)).toList();
+    // Guarantee ascending chronological order (01 to 31) across all platforms & backends
+    items.sort((a, b) => a.date.compareTo(b.date));
+    return items;
   } on DioException catch (e) {
     throw ApiError.fromDioException(e);
   }
