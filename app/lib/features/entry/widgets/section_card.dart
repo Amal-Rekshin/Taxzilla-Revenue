@@ -27,51 +27,139 @@ class _SectionCardState extends State<SectionCard> {
   late TextEditingController _newJobsAmountController;
   late TextEditingController _outstandingAmountController;
 
+  final FocusNode _amountFocusNode = FocusNode();
+  final FocusNode _jobsFocusNode = FocusNode();
+  final FocusNode _newJobsAmountFocusNode = FocusNode();
+  final FocusNode _outstandingAmountFocusNode = FocusNode();
+
+  static final _decimalFormatter = TextInputFormatter.withFunction((oldValue, newValue) {
+    final text = newValue.text;
+    if (text.isEmpty) return newValue;
+    if (RegExp(r'^\d*\.?\d{0,2}$').hasMatch(text)) {
+      return newValue;
+    }
+    return oldValue;
+  });
+
+  String _formatAmount(double val) {
+    if (val <= 0) return '';
+    if (val == val.roundToDouble()) {
+      return val.toInt().toString();
+    }
+    return val.toStringAsFixed(2);
+  }
+
   @override
   void initState() {
     super.initState();
     _amountController = TextEditingController(
-      text: widget.entry.amount > 0 ? widget.entry.amount.toStringAsFixed(2) : '',
+      text: widget.entry.amount > 0 ? _formatAmount(widget.entry.amount) : '',
     );
     _jobsController = TextEditingController(
-      text: widget.entry.jobsCompleted != null ? widget.entry.jobsCompleted.toString() : '',
+      text: (widget.entry.jobsCompleted != null && widget.entry.jobsCompleted! > 0)
+          ? widget.entry.jobsCompleted.toString()
+          : '',
     );
     _newJobsAmountController = TextEditingController(
-      text: (widget.entry.newJobsAmount ?? 0) > 0 ? widget.entry.newJobsAmount!.toStringAsFixed(2) : '',
+      text: (widget.entry.newJobsAmount ?? 0) > 0 ? _formatAmount(widget.entry.newJobsAmount!) : '',
     );
     _outstandingAmountController = TextEditingController(
-      text: (widget.entry.outstandingJobsAmount ?? 0) > 0 ? widget.entry.outstandingJobsAmount!.toStringAsFixed(2) : '',
+      text: (widget.entry.outstandingJobsAmount ?? 0) > 0 ? _formatAmount(widget.entry.outstandingJobsAmount!) : '',
     );
+
+    _amountFocusNode.addListener(_onAmountFocusChanged);
+    _newJobsAmountFocusNode.addListener(_onNewJobsAmountFocusChanged);
+    _outstandingAmountFocusNode.addListener(_onOutstandingAmountFocusChanged);
+  }
+
+  void _onAmountFocusChanged() {
+    if (!_amountFocusNode.hasFocus) {
+      if (_amountController.text.endsWith('.')) {
+        _amountController.text = _amountController.text.substring(0, _amountController.text.length - 1);
+      }
+    }
+  }
+
+  void _onNewJobsAmountFocusChanged() {
+    if (!_newJobsAmountFocusNode.hasFocus) {
+      if (_newJobsAmountController.text.endsWith('.')) {
+        _newJobsAmountController.text = _newJobsAmountController.text.substring(0, _newJobsAmountController.text.length - 1);
+      }
+    }
+  }
+
+  void _onOutstandingAmountFocusChanged() {
+    if (!_outstandingAmountFocusNode.hasFocus) {
+      if (_outstandingAmountController.text.endsWith('.')) {
+        _outstandingAmountController.text = _outstandingAmountController.text.substring(0, _outstandingAmountController.text.length - 1);
+      }
+    }
   }
 
   @override
   void didUpdateWidget(covariant SectionCard oldWidget) {
     super.didUpdateWidget(oldWidget);
-    if (oldWidget.entry.amount != widget.entry.amount) {
-      final text = widget.entry.amount > 0 ? widget.entry.amount.toStringAsFixed(2) : '';
-      if (_amountController.text != text) {
-        _amountController.text = text;
+    final isAccounts = widget.entry.isTriple || widget.entry.code == 'ACCOUNTS';
+
+    if (isAccounts) {
+      // ACCOUNTS total amount is auto-calculated and disabled; update display when sum changes
+      final sumText = widget.entry.amount > 0 ? _formatAmount(widget.entry.amount) : '';
+      if (_amountController.text != sumText) {
+        _amountController.text = sumText;
       }
-    }
-    if (!widget.entry.isTriple) {
-      final jcText = (widget.entry.jobsCompleted ?? 0).toString();
-      if (_jobsController.text != jcText) {
-        _jobsController.text = jcText;
+
+      // Only update New Jobs Amount if the field does NOT have focus and the value changed externally
+      if (!_newJobsAmountFocusNode.hasFocus) {
+        final currentNja = double.tryParse(_newJobsAmountController.text) ?? 0.0;
+        final newNja = widget.entry.newJobsAmount ?? 0.0;
+        if ((currentNja - newNja).abs() > 0.001) {
+          _newJobsAmountController.text = newNja > 0 ? _formatAmount(newNja) : '';
+        }
+      }
+
+      // Only update Outstanding Amount if the field does NOT have focus and the value changed externally
+      if (!_outstandingAmountFocusNode.hasFocus) {
+        final currentOja = double.tryParse(_outstandingAmountController.text) ?? 0.0;
+        final newOja = widget.entry.outstandingJobsAmount ?? 0.0;
+        if ((currentOja - newOja).abs() > 0.001) {
+          _outstandingAmountController.text = newOja > 0 ? _formatAmount(newOja) : '';
+        }
       }
     } else {
-      final njaText = (widget.entry.newJobsAmount ?? 0) > 0 ? widget.entry.newJobsAmount!.toStringAsFixed(2) : '';
-      final ojaText = (widget.entry.outstandingJobsAmount ?? 0) > 0 ? widget.entry.outstandingJobsAmount!.toStringAsFixed(2) : '';
-      if (_newJobsAmountController.text != njaText) _newJobsAmountController.text = njaText;
-      if (_outstandingAmountController.text != ojaText) _outstandingAmountController.text = ojaText;
+      // Non-ACCOUNTS: Amount field (only update if not focused and external value differs)
+      if (!_amountFocusNode.hasFocus) {
+        final currentAmt = double.tryParse(_amountController.text) ?? 0.0;
+        if ((currentAmt - widget.entry.amount).abs() > 0.001) {
+          _amountController.text = widget.entry.amount > 0 ? _formatAmount(widget.entry.amount) : '';
+        }
+      }
+
+      // Jobs Completed field (only update if not focused and external value differs)
+      if (!_jobsFocusNode.hasFocus) {
+        final currentJc = int.tryParse(_jobsController.text) ?? 0;
+        final newJc = widget.entry.jobsCompleted ?? 0;
+        if (currentJc != newJc) {
+          _jobsController.text = newJc > 0 ? newJc.toString() : '';
+        }
+      }
     }
   }
 
   @override
   void dispose() {
+    _amountFocusNode.removeListener(_onAmountFocusChanged);
+    _newJobsAmountFocusNode.removeListener(_onNewJobsAmountFocusChanged);
+    _outstandingAmountFocusNode.removeListener(_onOutstandingAmountFocusChanged);
+
     _amountController.dispose();
     _jobsController.dispose();
     _newJobsAmountController.dispose();
     _outstandingAmountController.dispose();
+
+    _amountFocusNode.dispose();
+    _jobsFocusNode.dispose();
+    _newJobsAmountFocusNode.dispose();
+    _outstandingAmountFocusNode.dispose();
     super.dispose();
   }
 
@@ -153,11 +241,10 @@ class _SectionCardState extends State<SectionCard> {
             // Amount Field: Disabled for ACCOUNTS (auto-calculated from New Job & Outstanding), editable for others
             TextFormField(
               controller: _amountController,
+              focusNode: _amountFocusNode,
               enabled: !isAccounts,
-              keyboardType: const TextInputOption(decimal: true),
-              inputFormatters: [
-                FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-              ],
+              keyboardType: const TextInputType.numberWithOptions(decimal: true),
+              inputFormatters: [_decimalFormatter],
               decoration: InputDecoration(
                 labelText: isAccounts ? 'Total Amount (₹) [Auto-calculated]' : 'Amount (₹)',
                 prefixText: '₹ ',
@@ -184,6 +271,7 @@ class _SectionCardState extends State<SectionCard> {
             if (!isAccounts)
               TextFormField(
                 controller: _jobsController,
+                focusNode: _jobsFocusNode,
                 keyboardType: TextInputType.number,
                 inputFormatters: [FilteringTextInputFormatter.digitsOnly],
                 decoration: const InputDecoration(
@@ -215,10 +303,9 @@ class _SectionCardState extends State<SectionCard> {
                       Expanded(
                         child: TextFormField(
                           controller: _newJobsAmountController,
-                          keyboardType: const TextInputOption(decimal: true),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                          ],
+                          focusNode: _newJobsAmountFocusNode,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [_decimalFormatter],
                           decoration: const InputDecoration(
                             labelText: 'New Job Amount (₹)',
                             prefixText: '₹ ',
@@ -235,10 +322,9 @@ class _SectionCardState extends State<SectionCard> {
                       Expanded(
                         child: TextFormField(
                           controller: _outstandingAmountController,
-                          keyboardType: const TextInputOption(decimal: true),
-                          inputFormatters: [
-                            FilteringTextInputFormatter.allow(RegExp(r'^\d+\.?\d{0,2}')),
-                          ],
+                          focusNode: _outstandingAmountFocusNode,
+                          keyboardType: const TextInputType.numberWithOptions(decimal: true),
+                          inputFormatters: [_decimalFormatter],
                           decoration: const InputDecoration(
                             labelText: 'Outstanding Amount (₹)',
                             prefixText: '₹ ',
@@ -260,9 +346,4 @@ class _SectionCardState extends State<SectionCard> {
       ),
     );
   }
-}
-
-class TextInputOption extends TextInputType {
-  const TextInputOption({required bool decimal})
-      : super.numberWithOptions(signed: false, decimal: decimal);
 }

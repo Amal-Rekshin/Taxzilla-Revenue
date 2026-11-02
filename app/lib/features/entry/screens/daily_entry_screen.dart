@@ -384,7 +384,7 @@ class _DailyEntryScreenState extends ConsumerState<DailyEntryScreen> {
                           itemBuilder: (context, index) {
                             final entryItem = formState.entries[index];
                             return SectionCard(
-                              key: ValueKey('${entryItem.sectionId}_$selectedDate}_$selectedSlot'),
+                              key: ValueKey('${entryItem.sectionId}_${selectedDate}_$selectedSlot'),
                               entry: entryItem,
                               onAmountChanged: (amt) {
                                 ref.read(entryFormNotifierProvider.notifier).updateAmount(entryItem.sectionId, amt);
